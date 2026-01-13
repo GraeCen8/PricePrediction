@@ -12,8 +12,7 @@ This module eliminates copy-paste by centralizing common functions for:
 
 Import this in all your research notebooks to save time and maintain consistency.
 
-Author: MemLabs
-Course: Build a Quant Trading System
+Author: Grae ceney
 """
 
 # ============================================================================

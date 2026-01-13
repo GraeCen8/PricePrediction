@@ -1,15 +1,10 @@
-math
 torch
 typing
-zipfile
 pathlib
 polars
 tqdm
-itertools
 torchvision
-numpy 
+numpy
 pandas
-datetime
 altair
-os
-random
+scikit-learn
