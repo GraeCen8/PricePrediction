@@ -1,0 +1,98 @@
+import torch 
+import math 
+import torch.nn as nn 
+
+class linearRegression(nn.Module): 
+    def __init__(self, inFeatures, outFeatures, seq_len, paramScale):
+        super(linearRegression, self).__init__()
+        # y = ax + b
+        self.L1 = nn.Linear(inFeatures * seq_len, 128 * paramScale, False)
+        self.L2 = nn.Linear(128*paramScale, 256*paramScale, False)
+        self.L3 = nn.Linear(256*paramScale, 128*paramScale, False)
+
+        self.flatten = nn.Flatten()
+        self.gelu = nn.GELU()
+
+        self.out = nn.Linear(128*paramScale, outFeatures, False)
+
+    def forward(self, X):
+        X = self.flatten(X)
+        X = self.L1(X)
+        X = self.gelu(X)
+        X = self.L2(X)
+        X = self.gelu(X)
+        X = self.L3(X)
+        X = self.gelu(X)
+        X = self.out(X)
+        return X
+    
+
+if __name__ == '__main__':
+    # Initialize model
+    config = {
+        'inFeatures': 23,
+        'outFeatures': 1,
+        'paramScale': 1,
+        'seq_len': 64
+    }
+
+    model = linearRegression(**config)
+    
+    # Move to GPU if available
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
+    
+    # Print model architecture
+    print("SPH-Net Model Architecture:")
+    print("=" * 80)
+    print(model)
+    print("=" * 80)
+    
+    # Count parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"\nTotal parameters: {total_params:,}")
+    print(f"Trainable parameters: {trainable_params:,}")
+    
+    # Example forward pass
+    batch_size = 32
+    seq_len = config['seq_len']  # Sequence length (must be divisible by patch_size=8)
+    
+    # Create dummy input
+    dummy_input = torch.randn(batch_size, seq_len, config['inFeatures']).to(device)
+    
+    # Forward pass
+    output = model(dummy_input)
+    
+    print(f"\nInput shape: {dummy_input.shape}")
+    print(f"Output shape: {output.shape}")
+    print(f"Expected output shape: ({batch_size}, {config['outFeatures']})")
+    
+    # Verify shapes match
+    assert output.shape == (batch_size, config['outFeatures']), \
+        f"Output shape mismatch! Got {output.shape}, expected ({batch_size}, {config['outFeatures']})"
+    
+    print("\n✓ Output shape is correct!")
+    
+    # Example training setup
+    print("\n" + "=" * 80)
+    print("Example Training Setup:")
+    print("=" * 80)
+    
+    # Loss function
+    criterion = nn.MSELoss()
+    
+    # Optimizer (as per paper: Adam with lr=0.001)
+    optimizer = torch.optim.Muon(model.parameters(), lr=0.001)
+    
+    print(f"Loss function: MSE")
+    print(f"Optimizer: Adam (lr=0.001)")
+    print(f"Batch size: {batch_size}")
+    print(f"Sequence length: {seq_len}")
+    print(f"\nModel outputs: {output.shape[0]} predictions per batch")
+
+    #print(output)
+
+    print("=" * 80)
+
+    #working 
