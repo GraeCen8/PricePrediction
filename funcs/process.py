@@ -183,6 +183,11 @@ class processing:
 
         fullDF = pd.concat([trainDF, valDF, testDF])
 
+        for X, y in trainLoader:
+            print("X:", X.shape)
+            print("y:", y.shape)
+            break
+
         return trainLoader, valLoader, testLoader, scaler, fullDF
 
 
@@ -203,7 +208,4 @@ if __name__ == "__main__":
     processor = processing(**dataPARAMS)
     trainLoader, valLoader, testLoader, scaler, fullDF = processor.process()
 
-    for X, y in trainLoader:
-        print("X:", X.shape)
-        print("y:", y.shape)
-        break
+   #
