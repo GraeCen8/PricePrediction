@@ -8,3 +8,5 @@ numpy
 pandas
 altair
 scikit-learn
+matplotlib
+seaborn
