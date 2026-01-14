@@ -12,6 +12,7 @@ from process import processing
 import sklearn.base 
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
+import os
 
 def detect_model_type(model):
     """
@@ -28,7 +29,7 @@ def detect_model_type(model):
     return "unknown"
 
 
-class Trainer:
+class Training:
     def __init__(self,
             model,
             optimizer,
@@ -155,14 +156,13 @@ class Trainer:
 
             # ----- checkpoint -----
             if epoch % self.saveGap == 0:
-                torch.save(
-                    {
-                        "epoch": epoch,
-                        "model_state_dict": model.state_dict(),
-                        "optimizer_state_dict": self.optimizer.state_dict(),
-                    },
-                    f"checkpoint_epoch_{epoch}.pt",
-                )
+                os.makedirs("weights", exist_ok=True)
+                modelName = f"weights/checkpoint-classifierTest-v1-{epoch_loss:.2f}.pth"
+                torch.save(model.state_dict(), modelName)
+
+        os.makedirs("weights", exist_ok=True)
+        modelName = f"weights/classifierTest-v1-{epoch_loss:.2f}.pth"
+        torch.save(model.state_dict(), modelName)
 
         writer.close()
 
@@ -176,3 +176,7 @@ class Trainer:
         else:
             print('unsuported model type: only sklearn and torch available')
             raise BrokenPipeError
+
+
+#--------------------------------
+#--------------------------------
