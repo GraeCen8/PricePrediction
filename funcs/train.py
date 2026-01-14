@@ -8,11 +8,11 @@ import math as m
 import numpy as np
 import matplotlib.pyplot as plt
 import tqdm
-from process import processing
 import sklearn.base 
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 import os
+import csv
 
 def detect_model_type(model):
     """
@@ -98,11 +98,13 @@ class Training:
         model = model.to(self.device)
         model.train()
 
-        writer = SummaryWriter(
-            log_dir=f"runs/{model.__class__.__name__}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        )
-
-        global_step = 0
+        # CSV setup
+        log_dir = f"logs/{model.__class__.__name__}"
+        os.makedirs(log_dir, exist_ok=True)
+        csv_path = os.path.join(log_dir, "training_log.csv")
+        
+        # Store metrics for end-of-training write
+        metrics = []
 
         for epoch in range(self.epochs):
             epoch_loss = 0.0
@@ -127,13 +129,11 @@ class Training:
                     self.scheduler.step()
 
                 epoch_loss += loss.item()
-                writer.add_scalar("train/loss_step", loss.item(), global_step)
-                global_step += 1
 
             epoch_loss /= len(self.trainLoader)
-            writer.add_scalar("train/loss_epoch", epoch_loss, epoch)
 
             # ----- validation -----
+            val_loss_value = None
             if self.valLoader is not None and epoch % self.valGap == 0:
                 model.eval()
                 val_loss = 0.0
@@ -151,8 +151,15 @@ class Training:
                         val_loss += loss.item()
 
                 val_loss /= len(self.valLoader)
-                writer.add_scalar("val/loss", val_loss, epoch)
+                val_loss_value = val_loss
                 model.train()
+
+            # Store metrics for this epoch
+            metrics.append({
+                'epoch': epoch,
+                'train_loss': epoch_loss,
+                'val_loss': val_loss_value if val_loss_value is not None else ''
+            })
 
             # ----- checkpoint -----
             if epoch % self.saveGap == 0:
@@ -160,12 +167,17 @@ class Training:
                 modelName = f"weights/checkpoint-classifierTest-v1-{epoch_loss:.2f}.pth"
                 torch.save(model.state_dict(), modelName)
 
+        # Write all metrics to CSV at the end
+        with open(csv_path, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['epoch', 'train_loss', 'val_loss'])
+            for metric in metrics:
+                writer.writerow([metric['epoch'], metric['train_loss'], metric['val_loss']])
+
         os.makedirs("weights", exist_ok=True)
         modelName = f"weights/classifierTest-v1-{epoch_loss:.2f}.pth"
         torch.save(model.state_dict(), modelName)
-
-        writer.close()
-
+            
     #-----
     def train(self):
         modeltype = detect_model_type(self.model)
