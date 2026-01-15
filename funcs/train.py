@@ -175,7 +175,7 @@ class Training:
                 writer.writerow([metric['epoch'], metric['train_loss'], metric['val_loss']])
 
         os.makedirs("weights", exist_ok=True)
-        modelName = f"weights/classifierTest-v1-{epoch_loss:.2f}.pth"
+        modelName = f"weights/classifierTest-v1-{val_loss_value:.2f}.pth"
         torch.save(model.state_dict(), modelName)
             
     #-----
