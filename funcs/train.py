@@ -46,7 +46,7 @@ class Training:
     ):
         self.model = model
         self.optimizer = optimizer
-        self.trainLoader = testLoader
+        self.trainLoader = trainLoader
         self.valLoader = valLoader
         self.testLoader = testLoader
         self.scheduler = scheduler
