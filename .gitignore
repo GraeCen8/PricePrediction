@@ -211,6 +211,6 @@ __marimo__/
 
 .pth 
 weights
-run
+runs
 logs
 plots
