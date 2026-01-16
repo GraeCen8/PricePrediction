@@ -36,7 +36,7 @@ DATA_CONFIG = {
     "target_column": "logRet",
     "window_size": 128,
     "split_ratio": "0.8,0.1,0.1",
-    "normalizeFunc": RobustScaler,  # or StandardScaler, RobustScaler, MinMaxScaler
+    "normalizeFunc": MinMaxScaler,  # or StandardScaler, RobustScaler, MinMaxScaler
     "scale_target": False,
     "shuffle_train": False,
     
@@ -66,13 +66,14 @@ MODEL_CONFIG = {
 # TRAINING CONFIGURATION
 # --------------------
 TRAINING_CONFIG = {
-    "optimizer": "adam",  # "adam", "sgd", "rmsprop", "adamw"
+    "optimizer": "adamw",  # "adam", "sgd", "rmsprop", "adamw"
     "learning_rate": 0.0001,
     "weight_decay": 0.0,
     "momentum": 0.9,  # For SGD
     
     "criterion": "mse",  # "mse", "mae", "huber", "directional"
     "alpha": 0.5,  # For directional loss (mse vs direction weight)
+    "midpoint": 0.0,  # For directional loss
     
     "scheduler": "cosine",  # "cosine", "step", "plateau", "none"
     "scheduler_params": {
@@ -170,7 +171,7 @@ def get_criterion(config):
     elif config["criterion"] == "huber":
         return nn.HuberLoss()
     elif config["criterion"] == "directional":
-        return d.DirectionalLoss(alpha=config["alpha"])
+        return d.DirectionalLoss(alpha=config["alpha"], midpoint=config["midpoint"])
     else:
         raise ValueError(f"Unknown criterion: {config['criterion']}")
 
@@ -500,11 +501,17 @@ if __name__ == '__main__':
     # set_config_for_experiment("full_experiment")  # Uncomment for full experiment
     # set_config_for_experiment("directional_focus")  # Uncomment for directional focus
     DATA_CONFIG["normalizeFunc"] = StandardScaler
-    TRAINING_CONFIG["criterion"] = "mse"
     TRAINING_CONFIG["alpha"] = 0.2
     TRAINING_CONFIG["epochs"] = 3
     TRAINING_CONFIG["learning_rate"] = 0.0005
     TRAINING_CONFIG["scheduler"] = "none"
+    TRAINING_CONFIG["early_stopping_patience"] = 3
+    TRAINING_CONFIG["weight_decay"] = 0.0
+    TRAINING_CONFIG["criterion"] = "directional"
+    MODEL_CONFIG["paramScale"] = 5
+    TRAINING_CONFIG['alpha'] = 0.3
+    TRAINING_CONFIG['midpoint'] = 0.5
+    
 
     # Run the pipeline
     results = evalPipeline()
