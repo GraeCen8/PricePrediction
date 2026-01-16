@@ -9,14 +9,14 @@ class linearRegression(nn.Module):
         input_size = inFeatures * seq_len
         
         # MLP layers
-        self.L1 = nn.Linear(input_size, 128 * paramScale, bias=False)
-        self.L2 = nn.Linear(128 * paramScale, 256 * paramScale, bias=False)
-        self.L3 = nn.Linear(256 * paramScale, 128 * paramScale, bias=False)
+        self.L1 = nn.Linear(input_size, 128 * paramScale, bias=True)
+        self.L2 = nn.Linear(128 * paramScale, 256 * paramScale, bias=True)
+        self.L3 = nn.Linear(256 * paramScale, 128 * paramScale, bias=True)
         
         self.gelu = nn.GELU()
         
         # Final output
-        self.out = nn.Linear(128 * paramScale, outFeatures, bias=False)
+        self.out = nn.Linear(128 * paramScale, outFeatures, bias=True)
         
     def forward(self, X):
         # Flatten sequence and features
