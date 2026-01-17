@@ -302,6 +302,10 @@ class Training:
                 # Check early stopping
                 if self._check_early_stopping(val_loss_value):
                     self.early_stop = True
+                
+                # Handle ReduceLROnPlateau scheduler during training
+                if self.scheduler is not None and isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    self.scheduler.step(val_loss_value)
             
             # ----- TensorBoard logging -----
             if self.writer is not None:
@@ -327,7 +331,9 @@ class Training:
                   f"LR: {current_lr:.6f}")
             
             # ----- checkpoint -----
-            if epoch % self.saveGap == 0 or epoch == self.epochs - 1:
+            # Convert saveGap to int if it's a float (for backward compatibility)
+            saveGap_int = int(self.saveGap) if isinstance(self.saveGap, float) else self.saveGap
+            if (isinstance(saveGap_int, int) and (epoch % saveGap_int == 0)) or epoch == self.epochs - 1:
                 os.makedirs("weights", exist_ok=True)
                 modelName = f"weights/checkpoint_{self.experiment_name}_epoch{epoch+1}_loss{epoch_loss:.4f}.pth"
                 torch.save({

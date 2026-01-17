@@ -485,12 +485,15 @@ class processing:
     def slide(self, df):
         """Create sliding windows for sequence prediction."""
         X, y = [], []
-        data = df.to_numpy()
+        # Exclude target column from features
+        feature_cols = [col for col in df.columns if col != self.target_column]
+        feature_data = df[feature_cols].to_numpy()
+        target_data = df[self.target_column].to_numpy()
         target_idx = df.columns.get_loc(self.target_column)
 
         for i in range(len(df) - self.window_size):
-            X.append(data[i:i + self.window_size])
-            y.append(data[i + self.window_size, target_idx])
+            X.append(feature_data[i:i + self.window_size])
+            y.append(target_data[i + self.window_size])
 
         return np.array(X), np.array(y)
 

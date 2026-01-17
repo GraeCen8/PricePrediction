@@ -4,6 +4,13 @@ from funcs.process import processing, LeanFeatureEngineering, TimeSeriesDataset,
 from funcs.train import Training
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 from models.linearRegression import linearRegression
+from models.LSTM import LSTMModel
+import importlib
+cnn_lstm_module = importlib.import_module('models.CNN-LSTM')
+CNNLSTM = cnn_lstm_module.CNNLSTM
+from models.TCN import TCNModel
+from models.SPHnet import SPHNet
+from models.TimeSeriesTransformer import TimeSeriesTransformer
 import funcs.evalLoss as eval
 import funcs.directionalLoss as d
 import pandas as pd
@@ -50,15 +57,48 @@ DATA_CONFIG = {
 # MODEL CONFIGURATION
 # --------------------
 MODEL_CONFIG = {
-    "model_type": "linearRegression",  # Currently only linearRegression
+    "model_type": "linearRegression",  # Options: "linearRegression", "LSTM", "CNN-LSTM", "TCN", "SPHnet", "TimeSeriesTransformer"
     "inFeatures": None,  # Will be set dynamically from data
     "outFeatures": 1,
     "seq_len": DATA_CONFIG['window_size'],
+    
+    # linearRegression parameters
     "paramScale": 5,
     
-    # Activation functions (if applicable for other models)
+    # LSTM parameters
+    "lstm_hidden_size": 128,
+    "lstm_num_layers": 3,
+    "lstm_dropout": 0.2,
+    
+    # CNN-LSTM parameters
+    "cnn_channels": 64,
+    "cnn_lstm_hidden": 128,
+    "cnn_lstm_dropout": 0.2,
+    
+    # TCN parameters
+    "tcn_num_channels": [64, 128, 128, 256],
+    "tcn_kernel_size": 3,
+    "tcn_dropout": 0.2,
+    
+    # SPHnet parameters
+    "sphnet_patch_size": 8,
+    "sphnet_embed_dim": 128,
+    "sphnet_vit_num_layers": 4,
+    "sphnet_transformer_num_layers": 4,
+    "sphnet_num_heads": 8,
+    "sphnet_ff_dim": 512,
+    "sphnet_dropout": 0.1,
+    
+    # TimeSeriesTransformer parameters
+    "transformer_d_model": 128,
+    "transformer_nhead": 8,
+    "transformer_num_layers": 4,
+    "transformer_dim_feedforward": 512,
+    "transformer_dropout": 0.1,
+    
+    # Common parameters
+    "dropout_rate": 0.0,  # General dropout (used if model-specific not set)
     "activation": "gelu",  # "relu", "leaky_relu", "tanh", "sigmoid"
-    "dropout_rate": 0.0,
     "batch_norm": False,
 }
 
@@ -86,7 +126,7 @@ TRAINING_CONFIG = {
     
     "epochs": 40,
     "valGap": 1,  # Validate every N epochs
-    "saveGap": 0.1,  # Save checkpoint every N epochs
+    "saveGap": 10,  # Save checkpoint every N epochs (must be integer)
     "early_stopping_patience": 6,  # Stop if no improvement for N epochs
     
     "device": "cuda" if torch.cuda.is_available() else "cpu",
@@ -226,8 +266,8 @@ def get_feature_engineering_func(config):
                 mom_period=config["mom_period"]
             )
         else:
-            # Use the example function if provided in process.py
-            return FeatureEngineeringExample(df, ema_n=config["ema_n"])
+            raise ValueError(f"Unknown feature_mode: {config['feature_mode']}. "
+                           f"Supported modes: 'lean', 'full'")
     return custom_feature_engineering
 
 # ============================================================================
@@ -280,20 +320,9 @@ def evalPipeline():
     processor = processing(**data_processing_params)
     trainLoader, valLoader, testLoader, feature_scaler, target_scaler, feature_names, metadata = processor.process()
     
-    # #region agent log
-    with open('/home/grae/Coding/PricePrediction/.cursor/debug.log', 'a') as f:
-        import json
-        f.write(json.dumps({'location': 'tests.py:281', 'message': 'After processor.process()', 'data': {'n_features': metadata.get('n_features'), 'feature_names_count': len(feature_names), 'metadata_keys': list(metadata.keys())}, 'timestamp': __import__('time').time(), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'A'}) + '\n')
-    # #endregion
-    
-    # Update model config with actual feature count
-    MODEL_CONFIG["inFeatures"] = 12#metadata['n_features']
-    
-    # #region agent log
-    with open('/home/grae/Coding/PricePrediction/.cursor/debug.log', 'a') as f:
-        import json
-        f.write(json.dumps({'location': 'tests.py:289', 'message': 'inFeatures set', 'data': {'inFeatures': MODEL_CONFIG["inFeatures"], 'metadata_n_features': metadata.get('n_features'), 'feature_names_count': len(feature_names)}, 'timestamp': __import__('time').time(), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'A'}) + '\n')
-    # #endregion
+    # Update model config with actual feature count and window size
+    MODEL_CONFIG["inFeatures"] = metadata['n_features']
+    MODEL_CONFIG["seq_len"] = metadata['window_size']  # Ensure seq_len matches actual window_size
     
     print(f"\n  Number of features detected: {MODEL_CONFIG['inFeatures']}")
     print(f"  Feature names: {feature_names[:5]}... (first 5 of {len(feature_names)})")
@@ -303,22 +332,72 @@ def evalPipeline():
     print("STEP 2: MODEL INITIALIZATION")
     print("=" * 60)
     
-    if MODEL_CONFIG["model_type"] == "linearRegression":
+    # Initialize model based on model_type
+    model_type = MODEL_CONFIG["model_type"]
+    n_features = MODEL_CONFIG["inFeatures"]
+    
+    if model_type == "linearRegression":
         model = linearRegression(
-            inFeatures=MODEL_CONFIG["inFeatures"],
+            inFeatures=n_features,
             outFeatures=MODEL_CONFIG["outFeatures"],
             seq_len=MODEL_CONFIG["seq_len"],
             paramScale=MODEL_CONFIG["paramScale"]
         )
+    elif model_type == "LSTM":
+        model = LSTMModel(
+            n_features=n_features,
+            hidden_size=MODEL_CONFIG["lstm_hidden_size"],
+            num_layers=MODEL_CONFIG["lstm_num_layers"],
+            dropout=MODEL_CONFIG["lstm_dropout"]
+        )
+    elif model_type == "CNN-LSTM":
+        model = CNNLSTM(
+            n_features=n_features,
+            cnn_channels=MODEL_CONFIG["cnn_channels"],
+            lstm_hidden=MODEL_CONFIG["cnn_lstm_hidden"],
+            dropout=MODEL_CONFIG["cnn_lstm_dropout"]
+        )
+    elif model_type == "TCN":
+        model = TCNModel(
+            n_features=n_features,
+            num_channels=MODEL_CONFIG["tcn_num_channels"],
+            kernel_size=MODEL_CONFIG["tcn_kernel_size"],
+            dropout=MODEL_CONFIG["tcn_dropout"]
+        )
+    elif model_type == "SPHnet":
+        # Ensure seq_len is divisible by patch_size
+        patch_size = MODEL_CONFIG["sphnet_patch_size"]
+        seq_len = MODEL_CONFIG["seq_len"]
+        if seq_len % patch_size != 0:
+            # Adjust seq_len to be divisible by patch_size
+            seq_len = (seq_len // patch_size) * patch_size
+            MODEL_CONFIG["seq_len"] = seq_len
+            print(f"  Warning: Adjusted seq_len to {seq_len} to be divisible by patch_size {patch_size}")
+        
+        model = SPHNet(
+            num_features=n_features,
+            patch_size=MODEL_CONFIG["sphnet_patch_size"],
+            embed_dim=MODEL_CONFIG["sphnet_embed_dim"],
+            vit_num_layers=MODEL_CONFIG["sphnet_vit_num_layers"],
+            transformer_num_layers=MODEL_CONFIG["sphnet_transformer_num_layers"],
+            num_heads=MODEL_CONFIG["sphnet_num_heads"],
+            ff_dim=MODEL_CONFIG["sphnet_ff_dim"],
+            dropout=MODEL_CONFIG["sphnet_dropout"],
+            output_dim=MODEL_CONFIG["outFeatures"]
+        )
+    elif model_type == "TimeSeriesTransformer":
+        model = TimeSeriesTransformer(
+            n_features=n_features,
+            d_model=MODEL_CONFIG["transformer_d_model"],
+            nhead=MODEL_CONFIG["transformer_nhead"],
+            num_layers=MODEL_CONFIG["transformer_num_layers"],
+            dim_feedforward=MODEL_CONFIG["transformer_dim_feedforward"],
+            dropout=MODEL_CONFIG["transformer_dropout"]
+        )
     else:
-        raise ValueError(f"Unsupported model type: {MODEL_CONFIG['model_type']}")
+        raise ValueError(f"Unsupported model type: {model_type}. "
+                        f"Supported types: linearRegression, LSTM, CNN-LSTM, TCN, SPHnet, TimeSeriesTransformer")
     
-    # #region agent log
-    with open('/home/grae/Coding/PricePrediction/.cursor/debug.log', 'a') as f:
-        import json
-        sample_batch, _ = next(iter(trainLoader))
-        f.write(json.dumps({'location': 'tests.py:298', 'message': 'Model created, checking input shapes', 'data': {'expected_input_shape': [MODEL_CONFIG['seq_len'], MODEL_CONFIG['inFeatures']], 'actual_batch_shape': list(sample_batch.shape), 'model_inFeatures': MODEL_CONFIG["inFeatures"]}, 'timestamp': __import__('time').time(), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'A'}) + '\n')
-    # #endregion
     
     print(f"  Model: {model.__class__.__name__}")
     print(f"  Input shape: (batch, {MODEL_CONFIG['seq_len']}, {MODEL_CONFIG['inFeatures']})")
@@ -450,6 +529,9 @@ def set_config_for_experiment(experiment_name):
             "window_size": 64,
             "batch_size": 32,
             "feature_mode": "lean",
+        })
+        MODEL_CONFIG.update({
+            "seq_len": DATA_CONFIG["window_size"],  # Update seq_len to match window_size
         })
         TRAINING_CONFIG.update({
             "epochs": 10,
