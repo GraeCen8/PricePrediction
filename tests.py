@@ -502,15 +502,17 @@ if __name__ == '__main__':
     # set_config_for_experiment("directional_focus")  # Uncomment for directional focus
     DATA_CONFIG["normalizeFunc"] = StandardScaler
     TRAINING_CONFIG["alpha"] = 0.2
-    TRAINING_CONFIG["epochs"] = 3
+    TRAINING_CONFIG["epochs"] = 40
     TRAINING_CONFIG["learning_rate"] = 0.0005
-    TRAINING_CONFIG["scheduler"] = "none"
+    TRAINING_CONFIG["scheduler"] = "cosine"
     TRAINING_CONFIG["early_stopping_patience"] = 3
     TRAINING_CONFIG["weight_decay"] = 0.0
     TRAINING_CONFIG["criterion"] = "directional"
     MODEL_CONFIG["paramScale"] = 5
     TRAINING_CONFIG['alpha'] = 0.3
-    TRAINING_CONFIG['midpoint'] = 0.5
+    TRAINING_CONFIG['midpoint'] = 0
+    DATA_CONFIG["normalizeFunc"] = StandardScaler
+    TRAINING_CONFIG["early_stopping_patience"] = 40
     
 
     # Run the pipeline
