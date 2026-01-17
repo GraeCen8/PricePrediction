@@ -280,8 +280,21 @@ def evalPipeline():
     processor = processing(**data_processing_params)
     trainLoader, valLoader, testLoader, feature_scaler, target_scaler, feature_names, metadata = processor.process()
     
+    # #region agent log
+    with open('/home/grae/Coding/PricePrediction/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({'location': 'tests.py:281', 'message': 'After processor.process()', 'data': {'n_features': metadata.get('n_features'), 'feature_names_count': len(feature_names), 'metadata_keys': list(metadata.keys())}, 'timestamp': __import__('time').time(), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'A'}) + '\n')
+    # #endregion
+    
     # Update model config with actual feature count
     MODEL_CONFIG["inFeatures"] = 12#metadata['n_features']
+    
+    # #region agent log
+    with open('/home/grae/Coding/PricePrediction/.cursor/debug.log', 'a') as f:
+        import json
+        f.write(json.dumps({'location': 'tests.py:289', 'message': 'inFeatures set', 'data': {'inFeatures': MODEL_CONFIG["inFeatures"], 'metadata_n_features': metadata.get('n_features'), 'feature_names_count': len(feature_names)}, 'timestamp': __import__('time').time(), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'A'}) + '\n')
+    # #endregion
+    
     print(f"\n  Number of features detected: {MODEL_CONFIG['inFeatures']}")
     print(f"  Feature names: {feature_names[:5]}... (first 5 of {len(feature_names)})")
     
@@ -299,6 +312,13 @@ def evalPipeline():
         )
     else:
         raise ValueError(f"Unsupported model type: {MODEL_CONFIG['model_type']}")
+    
+    # #region agent log
+    with open('/home/grae/Coding/PricePrediction/.cursor/debug.log', 'a') as f:
+        import json
+        sample_batch, _ = next(iter(trainLoader))
+        f.write(json.dumps({'location': 'tests.py:298', 'message': 'Model created, checking input shapes', 'data': {'expected_input_shape': [MODEL_CONFIG['seq_len'], MODEL_CONFIG['inFeatures']], 'actual_batch_shape': list(sample_batch.shape), 'model_inFeatures': MODEL_CONFIG["inFeatures"]}, 'timestamp': __import__('time').time(), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'A'}) + '\n')
+    # #endregion
     
     print(f"  Model: {model.__class__.__name__}")
     print(f"  Input shape: (batch, {MODEL_CONFIG['seq_len']}, {MODEL_CONFIG['inFeatures']})")
@@ -502,7 +522,7 @@ if __name__ == '__main__':
     # set_config_for_experiment("directional_focus")  # Uncomment for directional focus
     DATA_CONFIG["normalizeFunc"] = StandardScaler
     TRAINING_CONFIG["alpha"] = 0.2
-    TRAINING_CONFIG["epochs"] = 40
+    TRAINING_CONFIG["epochs"] = 3  # Lowered for debugging
     TRAINING_CONFIG["learning_rate"] = 0.0005
     TRAINING_CONFIG["scheduler"] = "cosine"
     TRAINING_CONFIG["early_stopping_patience"] = 3
