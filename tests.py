@@ -112,8 +112,10 @@ TRAINING_CONFIG = {
     "momentum": 0.9,  # For SGD
     
     "criterion": "mse",  # "mse", "mae", "huber", "directional"
-    "alpha": 0.5,  # For directional loss (mse vs direction weight)
+    "alpha": 0.3,  # For directional loss (mse vs direction weight, lower = more focus on direction)
     "midpoint": 0.0,  # For directional loss
+    "temperature": 10.0,  # For directional loss smoothness (higher = sharper)
+    "normalize_mse": True,  # Normalize MSE to match directional loss scale
     
     "scheduler": "cosine",  # "cosine", "step", "plateau", "none"
     "scheduler_params": {
@@ -211,7 +213,14 @@ def get_criterion(config):
     elif config["criterion"] == "huber":
         return nn.HuberLoss()
     elif config["criterion"] == "directional":
-        return d.DirectionalLoss(alpha=config["alpha"], midpoint=config["midpoint"])
+        return d.DirectionalLoss(
+            alpha=config.get("alpha", 0.1),
+            midpoint=config.get("midpoint", 0.0),
+            temperature=config.get("temperature", 3.0),
+            normalize_mse=config.get("normalize_mse", True),
+            balance_reg=config.get("balance_reg", 10.0),
+            focal_gamma=config.get("focal_gamma", 2.0)
+        )
     else:
         raise ValueError(f"Unknown criterion: {config['criterion']}")
 
@@ -402,6 +411,14 @@ def evalPipeline():
     print(f"  Model: {model.__class__.__name__}")
     print(f"  Input shape: (batch, {MODEL_CONFIG['seq_len']}, {MODEL_CONFIG['inFeatures']})")
     print(f"  Output shape: (batch, {MODEL_CONFIG['outFeatures']})")
+    
+    # Initialize final layer bias to zero to prevent initial bias
+    # This helps prevent the model from collapsing to one direction
+    for name, module in model.named_modules():
+        if isinstance(module, nn.Linear) and module.out_features == MODEL_CONFIG['outFeatures']:
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+                print(f"  Initialized final layer bias to zero: {name}")
     
     # Count parameters
     total_params = sum(p.numel() for p in model.parameters())
@@ -595,27 +612,63 @@ def set_config_for_experiment(experiment_name):
 
 if __name__ == '__main__':
     
-    # Option 1: Use default configuration (as defined at top)
-    # results = evalPipeline()
+    # ==================== OPTIMIZED FOR DIRECTIONAL ACCURACY ====================
+    # Configuration optimized to improve directional prediction accuracy
     
-    # Option 2: Use a pre-configured experiment template
-    set_config_for_experiment("quick_test")  # Uncomment to use quick test
-    # set_config_for_experiment("full_experiment")  # Uncomment for full experiment
-    # set_config_for_experiment("directional_focus")  # Uncomment for directional focus
-    DATA_CONFIG["normalizeFunc"] = StandardScaler
-    TRAINING_CONFIG["alpha"] = 0.2
-    TRAINING_CONFIG["epochs"] = 3  # Lowered for debugging
-    TRAINING_CONFIG["learning_rate"] = 0.0005
-    TRAINING_CONFIG["scheduler"] = "cosine"
-    TRAINING_CONFIG["early_stopping_patience"] = 3
-    TRAINING_CONFIG["weight_decay"] = 0.0
-    TRAINING_CONFIG["criterion"] = "directional"
-    MODEL_CONFIG["paramScale"] = 5
-    TRAINING_CONFIG['alpha'] = 0.3
-    TRAINING_CONFIG['midpoint'] = 0
-    DATA_CONFIG["normalizeFunc"] = StandardScaler
-    TRAINING_CONFIG["early_stopping_patience"] = 40
+    # Data configuration
+    DATA_CONFIG.update({
+        "normalizeFunc": StandardScaler,  # StandardScaler works well for directional prediction
+        "feature_mode": "lean",  # Lean features are sufficient and faster
+        "window_size": 128,
+        "batch_size": 64,
+    })
     
+    # Model configuration - Try LSTM (better for sequences)
+    MODEL_CONFIG.update({
+        "model_type": "LSTM",  # LSTM is good for sequential patterns
+        "lstm_hidden_size": 128,
+        "lstm_num_layers": 2,  # 2 layers for faster training
+        "lstm_dropout": 0.2,
+    })
+    
+    # Training configuration optimized for directional accuracy
+    TRAINING_CONFIG.update({
+        "criterion": "directional",
+        "alpha": 0.0,  # Pure directional loss (0% MSE, 100% direction) - uses BCE
+        "midpoint": 0.0,
+        "temperature": 1.0,  # Not used with BCE approach
+        "normalize_mse": False,  # Not used with BCE approach
+        "balance_reg": 0.0,  # Not used - BCE handles balance naturally
+        "focal_gamma": 0.0,  # Not used with BCE approach
+        "optimizer": "adamw",
+        "learning_rate": 0.0005,  # Moderate LR for stable training
+        "weight_decay": 1e-4,
+        "scheduler": "cosine",
+        "scheduler_params": {
+            "T_max": 3,  # Matches initial test epochs, will be updated for full training
+        },
+        "early_stopping_patience": 15,
+        "epochs": 3,  # Start with 3 epochs for testing
+    })
+    
+    # Evaluation configuration
+    EVAL_CONFIG.update({
+        "threshold": 0.0,  # Match midpoint
+        "evaluate_on": ["val", "test"],  # Evaluate on both val and test
+    })
+    
+    # Experiment configuration
+    EXPERIMENT_CONFIG.update({
+        "experiment_name": "directional_optimized",
+    })
+    
+    print("\n" + "="*60)
+    print("DIRECTIONAL ACCURACY OPTIMIZATION")
+    print("="*60)
+    print(f"Model: {MODEL_CONFIG['model_type']}")
+    print(f"Loss: {TRAINING_CONFIG['criterion']} (alpha={TRAINING_CONFIG['alpha']})")
+    print(f"Epochs: {TRAINING_CONFIG['epochs']} (testing mode)")
+    print("="*60 + "\n")
 
     # Run the pipeline
     results = evalPipeline()
