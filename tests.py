@@ -18,6 +18,7 @@ from funcs.empty_scalar import EmptyScaler
 import numpy as np
 import yaml
 from pathlib import Path
+from funcs.weight_loader import load_pretrained_weights, print_available_weights
 
 # ============================================================================
 # CONFIGURATION LOADING
@@ -506,6 +507,29 @@ def evalPipeline():
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"  Total parameters: {total_params:,}")
     print(f"  Trainable parameters: {trainable_params:,}")
+    
+    # ==================== LOAD PRE-TRAINED WEIGHTS (OPTIONAL) ====================
+    if MODEL_CONFIG.get("load_pretrained_weights", False):
+        print("\n" + "=" * 60)
+        print("STEP 2.5: LOADING PRE-TRAINED WEIGHTS")
+        print("=" * 60)
+        
+        # List available weights for user reference
+        print_available_weights()
+        
+        # Load pre-trained weights
+        weights_loaded = load_pretrained_weights(
+            model=model,
+            weights_path=MODEL_CONFIG.get("pretrained_weights_path", None),
+            weights_dir=EXPERIMENT_CONFIG.get("save_dir", "weights"),
+            model_type=model_type,
+            device=TRAINING_CONFIG["device"]
+        )
+        
+        if weights_loaded:
+            print("  ✓ Pre-trained weights loaded successfully!")
+        else:
+            print("  ⚠ Failed to load pre-trained weights, using random initialization")
     
     # ==================== TRAINING SETUP ====================
     print("\n" + "=" * 60)

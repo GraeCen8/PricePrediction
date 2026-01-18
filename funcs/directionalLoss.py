@@ -54,15 +54,15 @@ class DirectionalLoss(nn.Module):
         # Force prediction distribution to match true distribution
         # Use KL divergence style loss
         ratio_diff = torch.abs(pred_ratio - true_ratio)
-        # Make this a major component of the loss (not just a penalty)
-        distribution_loss = 50.0 * ratio_diff  # Very strong
+        # Make this a reasonable component of the loss (not overwhelming)
+        distribution_loss = 2.0 * ratio_diff  # Much more reasonable
         
         # Also ensure predictions have diversity (not all the same)
         pred_std = torch.std(y_pred)
         true_std = torch.std(y_true) + 1e-8
         std_ratio = pred_std / true_std
         # Penalize if std is too low (all predictions similar)
-        diversity_loss = 20.0 * torch.clamp(1.0 - std_ratio, min=0.0)
+        diversity_loss = 1.0 * torch.clamp(1.0 - std_ratio, min=0.0)
         
         # Combined loss - distribution matching is critical
         direction_loss = bce_loss + distribution_loss + diversity_loss
