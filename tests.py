@@ -645,10 +645,10 @@ if __name__ == '__main__':
         "weight_decay": 1e-4,
         "scheduler": "cosine",
         "scheduler_params": {
-            "T_max": 3,  # Matches initial test epochs, will be updated for full training
+            "T_max": 20,  # Matches initial test epochs, will be updated for full training
         },
         "early_stopping_patience": 15,
-        "epochs": 3,  # Start with 3 epochs for testing
+        "epochs": 20,  # Start with 3 epochs for testing
     })
     
     # Evaluation configuration
