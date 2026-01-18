@@ -1,0 +1,190 @@
+# ============================================================================
+# DATA CONFIGURATION
+# ============================================================================
+data:
+  # Data source
+  from_file: true
+  file_loc: "data"
+  timeframe: "15m"
+  pair: "btc"
+  
+  # Feature engineering
+  feature_mode: "lean"  # "lean" (20 features) or "full" (65+ features)
+  ema_n: 25
+  fast_ema: 8
+  slow_ema: 21
+  vol_ema: 14
+  mom_period: 14
+  
+  # Preprocessing
+  target_column: "logRet"
+  window_size: 128
+  split_ratio: "0.8,0.1,0.1"
+  normalizeFunc: "StandardScaler"  # "StandardScaler", "MinMaxScaler", "RobustScaler"
+  scale_target: false
+  shuffle_train: false
+  
+  # Dataloader
+  batch_size: 64
+  num_workers: 2
+  isClassifier: false
+
+# ============================================================================
+# MODEL CONFIGURATION
+# ============================================================================
+model:
+  model_type: "SPHnet"  # "linearRegression", "LSTM", "CNN-LSTM", "TCN", "SPHnet", "TimeSeriesTransformer"
+  inFeatures: null  # Will be set dynamically from data
+  outFeatures: 1
+  seq_len: 128  # Will match data window_size
+  
+  # linearRegression parameters
+  paramScale: 5
+  
+  # LSTM parameters
+  lstm_hidden_size: 128
+  lstm_num_layers: 3
+  lstm_dropout: 0.2
+  
+  # CNN-LSTM parameters
+  cnn_channels: 64
+  cnn_lstm_hidden: 128
+  cnn_lstm_dropout: 0.2
+  
+  # TCN parameters
+  tcn_num_channels: [64, 128, 128, 256]
+  tcn_kernel_size: 3
+  tcn_dropout: 0.2
+  
+  # SPHnet parameters
+  sphnet_patch_size: 8
+  sphnet_embed_dim: 128
+  sphnet_vit_num_layers: 4
+  sphnet_transformer_num_layers: 4
+  sphnet_num_heads: 8
+  sphnet_ff_dim: 512
+  sphnet_dropout: 0.1
+  
+  # TimeSeriesTransformer parameters
+  transformer_d_model: 128
+  transformer_nhead: 8
+  transformer_num_layers: 4
+  transformer_dim_feedforward: 512
+  transformer_dropout: 0.1
+  
+  # Common parameters
+  dropout_rate: 0.0
+  activation: "gelu"  # "relu", "leaky_relu", "tanh", "sigmoid"
+  batch_norm: false
+
+# ============================================================================
+# TRAINING CONFIGURATION
+# ============================================================================
+training:
+  optimizer: "adamw"  # "adam", "sgd", "rmsprop", "adamw"
+  learning_rate: 0.0005
+  weight_decay: 0.0001
+  momentum: 0.9  # For SGD
+  
+  criterion: "directional"  # "mse", "mae", "huber", "directional"
+  alpha: 0.0  # For directional loss (mse vs direction weight, lower = more focus on direction)
+  midpoint: 0.0  # For directional loss
+  temperature: 1.0  # For directional loss smoothness (higher = sharper)
+  normalize_mse: false  # Normalize MSE to match directional loss scale
+  balance_reg: 0.0  # For directional loss balance
+  focal_gamma: 0.0  # For directional loss focal weighting
+  
+  scheduler: "step"  # "cosine", "step", "plateau", "none"
+  scheduler_params:
+    T_max: 20  # For cosine annealing
+    step_size: 5  # For step LR
+    gamma: 0.1  # For step LR
+    patience: 5  # For ReduceLROnPlateau
+    factor: 0.5  # For ReduceLROnPlateau
+  
+  epochs: 20
+  valGap: 1  # Validate every N epochs
+  saveGap: 0.1  # Save checkpoint every N epochs
+  early_stopping_patience: 15  # Stop if no improvement for N epochs
+  
+  device: "cuda"  # Will be updated based on availability
+  modelType: "regressor"  # "regressor" or "classifier"
+  
+  # TensorBoard configuration
+  use_tensorboard: true
+  log_dir: "runs"
+  log_gradients: false  # Can be heavy on memory
+  log_weights: true
+  log_histograms: false  # Can be heavy on memory
+
+# ============================================================================
+# EVALUATION CONFIGURATION
+# ============================================================================
+evaluation:
+  threshold: 0.0  # For directional accuracy (0 for mean-centered returns)
+  evaluate_on: ["val", "test"]  # Which datasets to evaluate on
+  metrics_to_print: ["mse", "rmse", "mae", "r2", "direction_accuracy"]
+  save_predictions: true
+  plot_results: false
+
+# ============================================================================
+# EXPERIMENT TRACKING
+# ============================================================================
+experiment:
+  experiment_name: "large_test"
+  log_dir: "logs"
+  save_dir: "weights"
+  save_best: true
+  save_last: true
+  use_tensorboard: true
+  use_csv_log: false
+
+# ============================================================================
+# EXPERIMENT TEMPLATES
+# ============================================================================
+templates:
+  quick_test:
+    data:
+      window_size: 64
+      batch_size: 32
+      feature_mode: "lean"
+    model:
+      seq_len: 64
+    training:
+      epochs: 10
+      learning_rate: 0.001
+    experiment:
+      experiment_name: "quick_test"
+  
+  full_experiment:
+    data:
+      window_size: 128
+      batch_size: 64
+      feature_mode: "full"
+      normalizeFunc: "RobustScaler"
+      scale_target: true
+    training:
+      epochs: 100
+      learning_rate: 0.0001
+      optimizer: "adamw"
+      weight_decay: 0.01
+      scheduler: "cosine"
+      early_stopping_patience: 15
+    model:
+      paramScale: 8
+    experiment:
+      experiment_name: "full_experiment"
+      use_tensorboard: true
+  
+  directional_focus:
+    data:
+      feature_mode: "lean"
+      normalizeFunc: "StandardScaler"
+    training:
+      criterion: "directional"
+      alpha: 0.3  # More weight on direction
+      learning_rate: 0.0005
+    evaluation:
+      threshold: 0.0
+    experiment:
+      experiment_name: "directional_focus"

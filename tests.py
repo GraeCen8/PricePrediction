@@ -16,9 +16,90 @@ import funcs.directionalLoss as d
 import pandas as pd
 from funcs.empty_scalar import EmptyScaler
 import numpy as np
+import yaml
+from pathlib import Path
 
 # ============================================================================
-# HYPERPARAMETERS & CONFIGURATION
+# CONFIGURATION LOADING
+# ============================================================================
+
+def load_config(config_path="config.yaml", template_name=None):
+    """
+    Load configuration from YAML file with optional template override.
+    
+    Args:
+        config_path: Path to the YAML configuration file
+        template_name: Optional template name to apply (e.g., 'quick_test', 'full_experiment')
+    
+    Returns:
+        dict: Loaded configuration
+    """
+    config_file = Path(config_path)
+    
+    if not config_file.exists():
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
+    
+    with open(config_file, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    # Apply template if specified
+    if template_name and 'templates' in config and template_name in config['templates']:
+        template = config['templates'][template_name]
+        for section, settings in template.items():
+            if section in config:
+                config[section].update(settings)
+    
+    return config
+
+def update_configs_from_yaml(config):
+    """
+    Update global configuration dictionaries from loaded YAML config.
+    
+    Args:
+        config: Loaded configuration dictionary
+    """
+    global DATA_CONFIG, MODEL_CONFIG, TRAINING_CONFIG, EVAL_CONFIG, EXPERIMENT_CONFIG
+    
+    # Update each configuration section
+    if 'data' in config:
+        DATA_CONFIG.update(config['data'])
+    
+    if 'model' in config:
+        MODEL_CONFIG.update(config['model'])
+    
+    if 'training' in config:
+        TRAINING_CONFIG.update(config['training'])
+    
+    if 'evaluation' in config:
+        EVAL_CONFIG.update(config['evaluation'])
+    
+    if 'experiment' in config:
+        EXPERIMENT_CONFIG.update(config['experiment'])
+
+def get_scaler_from_string(scaler_name):
+    """
+    Convert scaler string name to actual scaler class.
+    
+    Args:
+        scaler_name: String name of the scaler
+    
+    Returns:
+        Scaler class
+    """
+    scaler_map = {
+        "StandardScaler": StandardScaler,
+        "MinMaxScaler": MinMaxScaler,
+        "RobustScaler": RobustScaler,
+        "EmptyScaler": EmptyScaler
+    }
+    
+    if scaler_name not in scaler_map:
+        raise ValueError(f"Unknown scaler: {scaler_name}. Available: {list(scaler_map.keys())}")
+    
+    return scaler_map[scaler_name]
+
+# ============================================================================
+# HYPERPARAMETERS & CONFIGURATION (DEFAULTS)
 # ============================================================================
 
 # --------------------
@@ -537,72 +618,35 @@ def set_config_for_experiment(experiment_name):
     """
     Pre-configured settings for different types of experiments.
     Call this BEFORE evalPipeline() to switch configurations.
+    Now uses YAML configuration templates.
     """
     global DATA_CONFIG, MODEL_CONFIG, TRAINING_CONFIG, EVAL_CONFIG, EXPERIMENT_CONFIG
     
-    if experiment_name == "quick_test":
-        """Quick test with minimal settings."""
-        DATA_CONFIG.update({
-            "window_size": 64,
-            "batch_size": 32,
-            "feature_mode": "lean",
-        })
-        MODEL_CONFIG.update({
-            "seq_len": DATA_CONFIG["window_size"],  # Update seq_len to match window_size
-        })
-        TRAINING_CONFIG.update({
-            "epochs": 10,
-            "learning_rate": 0.001,
-        })
-        EXPERIMENT_CONFIG.update({
-            "experiment_name": "quick_test",
-        })
+    try:
+        # Load configuration with specified template
+        config = load_config("config.yaml", template_name=experiment_name)
         
-    elif experiment_name == "full_experiment":
-        """Full experiment with all features."""
-        DATA_CONFIG.update({
-            "window_size": 128,
-            "batch_size": 64,
-            "feature_mode": "full",
-            "normalizeFunc": RobustScaler,
-            "scale_target": True,
-        })
-        TRAINING_CONFIG.update({
-            "epochs": 100,
-            "learning_rate": 0.0001,
-            "optimizer": "adamw",
-            "weight_decay": 0.01,
-            "scheduler": "cosine",
-            "early_stopping_patience": 15,
-        })
-        MODEL_CONFIG.update({
-            "paramScale": 8,
-        })
-        EXPERIMENT_CONFIG.update({
-            "experiment_name": "full_experiment",
-            "use_tensorboard": True,
-        })
+        # Update global configuration dictionaries
+        update_configs_from_yaml(config)
         
-    elif experiment_name == "directional_focus":
-        """Focus on directional accuracy."""
-        DATA_CONFIG.update({
-            "feature_mode": "lean",
-            "normalizeFunc": StandardScaler,
-        })
-        TRAINING_CONFIG.update({
-            "criterion": "directional",
-            "alpha": 0.3,  # More weight on direction
-            "learning_rate": 0.0005,
-        })
-        EVAL_CONFIG.update({
-            "threshold": 0.0,
-        })
-        EXPERIMENT_CONFIG.update({
-            "experiment_name": "directional_focus",
-        })
+        # Handle string-based scaler selection
+        if isinstance(DATA_CONFIG.get("normalizeFunc"), str):
+            DATA_CONFIG["normalizeFunc"] = get_scaler_from_string(DATA_CONFIG["normalizeFunc"])
         
-    else:
-        print(f"Unknown experiment template: {experiment_name}")
+        # Update device based on availability
+        if torch.cuda.is_available():
+            TRAINING_CONFIG["device"] = "cuda"
+        else:
+            TRAINING_CONFIG["device"] = "cpu"
+        
+        # Ensure model seq_len matches data window_size
+        MODEL_CONFIG["seq_len"] = DATA_CONFIG["window_size"]
+        
+        print(f"✅ Loaded experiment template: {experiment_name}")
+        
+    except Exception as e:
+        print(f"⚠️  Could not load template '{experiment_name}': {e}")
+        print("Available templates: quick_test, full_experiment, directional_focus")
         print("Using default configuration.")
 
 
@@ -612,63 +656,45 @@ def set_config_for_experiment(experiment_name):
 
 if __name__ == '__main__':
     
-    # ==================== OPTIMIZED FOR DIRECTIONAL ACCURACY ====================
-    # Configuration optimized to improve directional prediction accuracy
+    # ==================== LOAD CONFIGURATION FROM YAML ====================
+    # Load configuration from config.yaml file
     
-    # Data configuration
-    DATA_CONFIG.update({
-        "normalizeFunc": StandardScaler,  # StandardScaler works well for directional prediction
-        "feature_mode": "lean",  # Lean features are sufficient and faster
-        "window_size": 128,
-        "batch_size": 64,
-    })
-    
-    # Model configuration - Try LSTM (better for sequences)
-    MODEL_CONFIG.update({
-        "model_type": "LSTM",  # LSTM is good for sequential patterns
-        "lstm_hidden_size": 128,
-        "lstm_num_layers": 2,  # 2 layers for faster training
-        "lstm_dropout": 0.2,
-    })
-    
-    # Training configuration optimized for directional accuracy
-    TRAINING_CONFIG.update({
-        "criterion": "directional",
-        "alpha": 0.0,  # Pure directional loss (0% MSE, 100% direction) - uses BCE
-        "midpoint": 0.0,
-        "temperature": 1.0,  # Not used with BCE approach
-        "normalize_mse": False,  # Not used with BCE approach
-        "balance_reg": 0.0,  # Not used - BCE handles balance naturally
-        "focal_gamma": 0.0,  # Not used with BCE approach
-        "optimizer": "adamw",
-        "learning_rate": 0.0005,  # Moderate LR for stable training
-        "weight_decay": 1e-4,
-        "scheduler": "cosine",
-        "scheduler_params": {
-            "T_max": 20,  # Matches initial test epochs, will be updated for full training
-        },
-        "early_stopping_patience": 15,
-        "epochs": 20,  # Start with 3 epochs for testing
-    })
-    
-    # Evaluation configuration
-    EVAL_CONFIG.update({
-        "threshold": 0.0,  # Match midpoint
-        "evaluate_on": ["val", "test"],  # Evaluate on both val and test
-    })
-    
-    # Experiment configuration
-    EXPERIMENT_CONFIG.update({
-        "experiment_name": "directional_optimized",
-    })
-    
-    print("\n" + "="*60)
-    print("DIRECTIONAL ACCURACY OPTIMIZATION")
-    print("="*60)
-    print(f"Model: {MODEL_CONFIG['model_type']}")
-    print(f"Loss: {TRAINING_CONFIG['criterion']} (alpha={TRAINING_CONFIG['alpha']})")
-    print(f"Epochs: {TRAINING_CONFIG['epochs']} (testing mode)")
-    print("="*60 + "\n")
+    try:
+        # Load base configuration
+        config = load_config("config.yaml")
+        
+        # Update global configuration dictionaries
+        update_configs_from_yaml(config)
+        
+        # Handle string-based scaler selection
+        if isinstance(DATA_CONFIG.get("normalizeFunc"), str):
+            DATA_CONFIG["normalizeFunc"] = get_scaler_from_string(DATA_CONFIG["normalizeFunc"])
+        
+        # Update device based on availability
+        if torch.cuda.is_available():
+            TRAINING_CONFIG["device"] = "cuda"
+        else:
+            TRAINING_CONFIG["device"] = "cpu"
+        
+        # Ensure model seq_len matches data window_size
+        MODEL_CONFIG["seq_len"] = DATA_CONFIG["window_size"]
+        
+        print("\n" + "="*60)
+        print("CONFIGURATION LOADED FROM YAML")
+        print("="*60)
+        print(f"Model: {MODEL_CONFIG['model_type']}")
+        print(f"Loss: {TRAINING_CONFIG['criterion']} (alpha={TRAINING_CONFIG['alpha']})")
+        print(f"Epochs: {TRAINING_CONFIG['epochs']}")
+        print(f"Device: {TRAINING_CONFIG['device']}")
+        print(f"Features: {DATA_CONFIG['feature_mode']} mode")
+        print(f"Scaler: {DATA_CONFIG['normalizeFunc'].__name__}")
+        print("="*60 + "\n")
+        
+    except Exception as e:
+        print(f"Error loading configuration: {e}")
+        print("Using default configuration from tests.py")
+        # Fall back to default configuration if YAML loading fails
+        pass
 
     # Run the pipeline
     results = evalPipeline()
