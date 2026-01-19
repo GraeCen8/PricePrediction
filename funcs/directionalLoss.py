@@ -55,7 +55,7 @@ class DirectionalLoss(nn.Module):
         # Use KL divergence style loss
         ratio_diff = torch.abs(pred_ratio - true_ratio)
         # Make this a reasonable component of the loss (not overwhelming)
-        distribution_loss = 2.0 * ratio_diff  # Much more reasonable
+        distribution_loss = 50 * ratio_diff  # Much more reasonable
         
         # Also ensure predictions have diversity (not all the same)
         pred_std = torch.std(y_pred)
