@@ -19,10 +19,14 @@ data:
   # Preprocessing
   target_column: "logRet"
   window_size: 128
-  split_ratio: "0.8,0.1,0.1"
-  normalizeFunc: "StandardScaler"  # "StandardScaler", "MinMaxScaler", "RobustScaler"
+  split_ratio: "0.7,0.2,0.1"
+  normalizeFunc: "RobustScaler"  # "StandardScaler", "MinMaxScaler", "RobustScaler"
   scale_target: false
   shuffle_train: false
+  
+  # Prediction mode
+  prediction_mode: "future"  # "past" (next bar) or "future" (x bars away)
+  future_bar_offset: 1  # Number of bars to look ahead for future prediction
   
   # Dataloader
   batch_size: 64

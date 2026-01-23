@@ -328,6 +328,8 @@ class processing:
         split_ratio='0.7,0.2,0.1',
         shuffle_train=True,  # Renamed for clarity
         scale_target=False,  # New: option to scale target separately
+        prediction_mode='future',  # 'past' (next bar) or 'future' (x bars away)
+        future_bar_offset=1,  # Number of bars to look ahead for future prediction
         verbose=True
     ):
 
@@ -367,6 +369,8 @@ class processing:
         self.split_ratio = split_ratio
         self.shuffle_train = shuffle_train
         self.scale_target = scale_target
+        self.prediction_mode = prediction_mode
+        self.future_bar_offset = future_bar_offset
         self.verbose = verbose
 
     # --------------------------------------------------
@@ -483,7 +487,12 @@ class processing:
 
     # --------------------------------------------------
     def slide(self, df):
-        """Create sliding windows for sequence prediction."""
+        """Create sliding windows for sequence prediction.
+        
+        Supports two prediction modes:
+        - 'past': Predict the next bar (traditional approach)
+        - 'future': Predict a bar x bars away from the past bar end
+        """
         X, y = [], []
         # Exclude target column from features
         feature_cols = [col for col in df.columns if col != self.target_column]
@@ -491,9 +500,22 @@ class processing:
         target_data = df[self.target_column].to_numpy()
         target_idx = df.columns.get_loc(self.target_column)
 
-        for i in range(len(df) - self.window_size):
+        # Determine target index based on prediction mode
+        if self.prediction_mode == 'past':
+            # Traditional: predict next bar after window
+            target_offset = self.window_size
+        elif self.prediction_mode == 'future':
+            # Future: predict bar x bars away from past bar end
+            target_offset = self.window_size + self.future_bar_offset
+        else:
+            raise ValueError(f"prediction_mode must be 'past' or 'future', got '{self.prediction_mode}'")
+
+        # Adjust loop to account for future offset
+        max_start_idx = len(df) - target_offset
+        
+        for i in range(max_start_idx):
             X.append(feature_data[i:i + self.window_size])
-            y.append(target_data[i + self.window_size])
+            y.append(target_data[i + target_offset])
 
         return np.array(X), np.array(y)
 
@@ -525,6 +547,9 @@ class processing:
         if self.verbose:
             print(f"Features created: {len(df.columns)} total columns")
             print(f"Final dataset size: {len(df)} rows")
+            print(f"Prediction mode: {self.prediction_mode}")
+            if self.prediction_mode == 'future':
+                print(f"Future bar offset: {self.future_bar_offset} bars")
         
         # Validate window size
         if self.window_size >= len(df):

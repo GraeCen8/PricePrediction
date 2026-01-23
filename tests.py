@@ -405,6 +405,8 @@ def evalPipeline():
         "split_ratio": DATA_CONFIG["split_ratio"],
         "shuffle_train": DATA_CONFIG["shuffle_train"],
         "scale_target": DATA_CONFIG["scale_target"],
+        "prediction_mode": DATA_CONFIG.get("prediction_mode", "future"),
+        "future_bar_offset": DATA_CONFIG.get("future_bar_offset", 1),
         "verbose": True,
     }
     
