@@ -333,7 +333,7 @@ class Training:
             # ----- checkpoint -----
             # Convert saveGap to int if it's a float (for backward compatibility)
             saveGap_int = int(self.saveGap) if isinstance(self.saveGap, float) else self.saveGap
-            if (isinstance(saveGap_int, int) and (epoch % saveGap_int == 0)) or epoch == self.epochs - 1:
+            if (isinstance(saveGap_int, int) and saveGap_int > 0 and (epoch % saveGap_int == 0)) or epoch == self.epochs - 1:
                 os.makedirs("weights", exist_ok=True)
                 modelName = f"weights/checkpoint_{self.experiment_name}_epoch{epoch+1}_loss{epoch_loss:.4f}.pth"
                 torch.save({
